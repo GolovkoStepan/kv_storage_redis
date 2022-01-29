@@ -5,7 +5,13 @@ defmodule KvStorageRedis do
 
   use GenServer
 
-  defstruct host: nil, port: nil, db: nil, conn: nil
+  defstruct redis_conn: nil
+
+  @typedoc "Конфигурация хранилища"
+  @type t :: %{
+          __struct__: __MODULE__,
+          conn: pid()
+        }
 
   ### Interface
 
@@ -14,12 +20,13 @@ defmodule KvStorageRedis do
 
   ## Примеры
 
-      iex> {:ok, _pid} = KvStorageRedis.start()
+      iex> {:ok, conn} = Redix.start_link("redis://127.0.0.1:6379/0", name: :redix)
+      iex> {:ok, _pid} = KvStorageRedis.start_link(conn)
 
   """
-  @spec start(any, any, any) :: :ignore | {:error, any} | {:ok, pid}
-  def start(host \\ "localhost", port \\ 6379, db \\ 0) do
-    GenServer.start_link(__MODULE__, %__MODULE__{host: host, port: port, db: db})
+  @spec start_link(pid()) :: GenServer.on_start()
+  def start_link(redis_conn) do
+    GenServer.start_link(__MODULE__, %__MODULE__{redis_conn: redis_conn})
   end
 
   @doc ~S"""
@@ -27,11 +34,12 @@ defmodule KvStorageRedis do
 
   ## Примеры
 
-      iex> {:ok, pid} = KvStorageRedis.start()
+      iex> {:ok, conn} = Redix.start_link("redis://127.0.0.1:6379/0", name: :redix)
+      iex> {:ok, pid} = KvStorageRedis.start_link(conn)
       iex> %KvStorageRedis{} = KvStorageRedis.config(pid)
 
   """
-  @spec config(atom | pid | {atom, any} | {:via, atom, any}) :: any
+  @spec config(GenServer.server()) :: t()
   def config(pid) do
     GenServer.call(pid, :config)
   end
@@ -41,11 +49,13 @@ defmodule KvStorageRedis do
 
   ## Примеры
 
-      iex> {:ok, pid} = KvStorageRedis.start()
-      iex> :ok = KvStorageRedis.set(pid, "k", 1)
+      iex> {:ok, conn} = Redix.start_link("redis://127.0.0.1:6379/0", name: :redix)
+      iex> {:ok, pid} = KvStorageRedis.start_link(conn)
+      iex> :ok = KvStorageRedis.set(pid, "k", "1")
+      iex> {:ok, "1"} = KvStorageRedis.get(pid, "k")
 
   """
-  @spec get(atom | pid | {atom, any} | {:via, atom, any}, any) :: any
+  @spec get(pid(), String.t()) :: {:ok, String.t()} | {:ok, nil}
   def get(pid, key) do
     GenServer.call(pid, {:get, key})
   end
@@ -55,12 +65,12 @@ defmodule KvStorageRedis do
 
   ## Примеры
 
-      iex> {:ok, pid} = KvStorageRedis.start()
-      iex> KvStorageRedis.set(pid, "k", 1)
-      iex> {:ok, "1"} = KvStorageRedis.get(pid, "k")
+      iex> {:ok, conn} = Redix.start_link("redis://127.0.0.1:6379/0", name: :redix)
+      iex> {:ok, pid} = KvStorageRedis.start_link(conn)
+      iex> :ok = KvStorageRedis.set(pid, "k", 1)
 
   """
-  @spec set(atom | pid | {atom, any} | {:via, atom, any}, any, any) :: :ok
+  @spec set(pid(), String.t(), String.t()) :: :ok
   def set(pid, key, value) do
     GenServer.cast(pid, {:set, key, value})
   end
@@ -70,12 +80,13 @@ defmodule KvStorageRedis do
 
   ## Примеры
 
-      iex> {:ok, pid} = KvStorageRedis.start()
+      iex> {:ok, conn} = Redix.start_link("redis://127.0.0.1:6379/0", name: :redix)
+      iex> {:ok, pid} = KvStorageRedis.start_link(conn)
       iex> :ok = KvStorageRedis.set(pid, "k", 1)
 
   """
-  @spec setex(atom | pid | {atom, any} | {:via, atom, any}, any, any, any) :: :ok
-  def setex(pid, key, value, ttl) do
+  @spec set(pid(), String.t(), String.t(), non_neg_integer()) :: :ok
+  def set(pid, key, value, ttl) do
     GenServer.cast(pid, {:setex, key, value, ttl})
   end
 
@@ -83,12 +94,7 @@ defmodule KvStorageRedis do
 
   @impl true
   def init(%__MODULE__{} = state) do
-    {:ok, conn} = Redix.start_link(
-      "redis://#{state.host}:#{state.port}/#{state.db}",
-      name: :redix
-    )
-
-    {:ok, %{state | conn: conn}}
+    {:ok, state}
   end
 
   @impl true
@@ -98,18 +104,18 @@ defmodule KvStorageRedis do
 
   @impl true
   def handle_call({:get, key}, _from, state) do
-    {:reply, Redix.command(state.conn, ["GET", key]), state}
+    {:reply, Redix.command(state.redis_conn, ["GET", key]), state}
   end
 
   @impl true
   def handle_cast({:set, key, value}, state) do
-    Redix.command(state.conn, ["SET", key, value])
+    Redix.command(state.redis_conn, ["SET", key, value])
     {:noreply, state}
   end
 
   @impl true
-  def handle_cast({:setex, key, value, ttl}, state) do
-    Redix.command(state.conn, ["SETEX", key, ttl, value])
+  def handle_cast({:set, key, value, ttl}, state) do
+    Redix.command(state.redis_conn, ["SETEX", key, ttl, value])
     {:noreply, state}
   end
 end

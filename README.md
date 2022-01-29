@@ -1,6 +1,6 @@
 # KvStorageRedis
 
-**TODO: Add description**
+Key-value store implementation using redis database.
 
 ## Installation
 
