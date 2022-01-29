@@ -21,7 +21,8 @@ defmodule KvStorageRedis.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      {:redix, "~> 1.1"}
+      {:redix, "~> 1.1"},
+      {:ex_check, "~> 0.14.0", only: [:dev], runtime: false}
     ]
   end
 end
