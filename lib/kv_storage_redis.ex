@@ -5,12 +5,12 @@ defmodule KvStorageRedis do
 
   use GenServer
 
-  defstruct redis_conn: nil
+  defstruct redix_name: nil
 
   @typedoc "Конфигурация хранилища"
   @type t :: %{
           __struct__: __MODULE__,
-          conn: pid()
+          redix_name: atom()
         }
 
   ### Interface
@@ -20,13 +20,12 @@ defmodule KvStorageRedis do
 
   ## Примеры
 
-      iex> {:ok, conn} = Redix.start_link("redis://127.0.0.1:6379/0", name: :redix)
-      iex> {:ok, _pid} = KvStorageRedis.start_link(conn)
+      iex> {:ok, _pid} = KvStorageRedis.start_link(%{redix_name: :redix, kv_name: :kv})
 
   """
-  @spec start_link(pid()) :: GenServer.on_start()
-  def start_link(redis_conn) do
-    GenServer.start_link(__MODULE__, %__MODULE__{redis_conn: redis_conn})
+  @spec start_link(%{redix_name: atom(), kv_name: atom()}) :: GenServer.on_start()
+  def start_link(%{redix_name: redix_name, kv_name: kv_name}) do
+    GenServer.start_link(__MODULE__, %__MODULE__{redix_name: redix_name}, name: kv_name)
   end
 
   @doc ~S"""
@@ -34,8 +33,7 @@ defmodule KvStorageRedis do
 
   ## Примеры
 
-      iex> {:ok, conn} = Redix.start_link("redis://127.0.0.1:6379/0", name: :redix)
-      iex> {:ok, pid} = KvStorageRedis.start_link(conn)
+      iex> {:ok, pid} = KvStorageRedis.start_link(%{redix_name: :redix, kv_name: :kv})
       iex> %KvStorageRedis{} = KvStorageRedis.config(pid)
 
   """
@@ -49,8 +47,7 @@ defmodule KvStorageRedis do
 
   ## Примеры
 
-      iex> {:ok, conn} = Redix.start_link("redis://127.0.0.1:6379/0", name: :redix)
-      iex> {:ok, pid} = KvStorageRedis.start_link(conn)
+      iex> {:ok, pid} = KvStorageRedis.start_link(%{redix_name: :redix, kv_name: :kv})
       iex> :ok = KvStorageRedis.set(pid, "k", "1")
       iex> {:ok, "1"} = KvStorageRedis.get(pid, "k")
 
@@ -65,8 +62,7 @@ defmodule KvStorageRedis do
 
   ## Примеры
 
-      iex> {:ok, conn} = Redix.start_link("redis://127.0.0.1:6379/0", name: :redix)
-      iex> {:ok, pid} = KvStorageRedis.start_link(conn)
+      iex> {:ok, pid} = KvStorageRedis.start_link(%{redix_name: :redix, kv_name: :kv})
       iex> :ok = KvStorageRedis.set(pid, "k", 1)
 
   """
@@ -80,8 +76,7 @@ defmodule KvStorageRedis do
 
   ## Примеры
 
-      iex> {:ok, conn} = Redix.start_link("redis://127.0.0.1:6379/0", name: :redix)
-      iex> {:ok, pid} = KvStorageRedis.start_link(conn)
+      iex> {:ok, pid} = KvStorageRedis.start_link(%{redix_name: :redix, kv_name: :kv})
       iex> :ok = KvStorageRedis.set(pid, "k", 1)
 
   """
@@ -104,18 +99,18 @@ defmodule KvStorageRedis do
 
   @impl true
   def handle_call({:get, key}, _from, state) do
-    {:reply, Redix.command(state.redis_conn, ["GET", key]), state}
+    {:reply, Redix.command(Process.whereis(state.redix_name), ["GET", key]), state}
   end
 
   @impl true
   def handle_cast({:set, key, value}, state) do
-    Redix.command(state.redis_conn, ["SET", key, value])
+    Redix.command(Process.whereis(state.redix_name), ["SET", key, value])
     {:noreply, state}
   end
 
   @impl true
   def handle_cast({:set, key, value, ttl}, state) do
-    Redix.command(state.redis_conn, ["SETEX", key, ttl, value])
+    Redix.command(Process.whereis(state.redix_name), ["SETEX", key, ttl, value])
     {:noreply, state}
   end
 end
