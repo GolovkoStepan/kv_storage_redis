@@ -5,6 +5,8 @@ defmodule KvStorageRedis do
 
   use GenServer
 
+  alias KvStorageRedis.Log
+
   defstruct redix_name: nil
 
   @typedoc "Конфигурация хранилища"
@@ -25,6 +27,7 @@ defmodule KvStorageRedis do
   """
   @spec start_link(%{redix_name: atom(), kv_name: atom()}) :: GenServer.on_start()
   def start_link(%{redix_name: redix_name, kv_name: kv_name}) do
+    Log.info("KV Storage Redis process started")
     GenServer.start_link(__MODULE__, %__MODULE__{redix_name: redix_name}, name: kv_name)
   end
 
